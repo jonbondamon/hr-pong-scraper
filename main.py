@@ -92,39 +92,68 @@ def main():
         logger.error(f"Failed to initialize multi-league scraper: {e}")
         return 1
     
-    # Run periodic scraping
+    # Run continuous monitoring with smart refresh
     try:
-        logger.info("Starting periodic multi-league scraping...")
+        logger.info("Starting continuous multi-league monitoring...")
         
         start_time = datetime.now()
         last_cleanup = datetime.now()
+        monitoring_threads = []
         
-        while True:
-            loop_start = datetime.now()
-            
+        def match_callback_with_league(matches, league_name):
+            """Callback that adds league info to matches and processes them"""
             try:
-                # Scrape all leagues
-                logger.info("Starting scrape cycle...")
-                results = multi_scraper.scrape_all_leagues()
+                # Add league info to matches
+                for match in matches:
+                    match.league = league_name
                 
-                # Log summary
-                stats = multi_scraper.get_summary_stats()
-                logger.info(f"Scrape complete: {stats['total_matches']} total matches, "
-                           f"{stats['live_matches']} live, {stats['upcoming_matches']} upcoming")
-                
-                # Log live matches
-                live_matches = [m for m in multi_scraper.all_matches if m.is_live()]
-                for match in live_matches:
-                    score_str = f" - {match.score}" if match.score else ""
-                    odds_str = f" [{match.odds.player1_moneyline}|{match.odds.player2_moneyline}]" if match.odds else ""
-                    logger.info(f"LIVE [{match.league}]: {match.player1.name} vs {match.player2.name}{score_str}{odds_str}")
+                # Store matches to Cosmos DB (auto-storage is handled by scraper)
+                # Just log live matches with changes
+                live_matches = [m for m in matches if m.is_live()]
+                if live_matches:
+                    for match in live_matches:
+                        score_str = f" - {match.score}" if match.score else ""
+                        odds_str = f" [{match.odds.player1_moneyline}|{match.odds.player2_moneyline}]" if match.odds else ""
+                        logger.info(f"LIVE [{match.league}]: {match.player1.name} vs {match.player2.name}{score_str}{odds_str}")
                 
                 # Update health status
                 health_status.update_scrape(success=True)
                 
             except Exception as e:
-                logger.error(f"Scrape cycle failed: {e}")
-                health_status.update_scrape(success=False, error=e)
+                logger.error(f"Match callback error for {league_name}: {e}")
+        
+        # Start monitoring threads for each league
+        for league_name, scraper in multi_scraper.scrapers.items():
+            logger.info(f"Starting continuous monitoring for {league_name}")
+            
+            # Configure scraper with proper intervals and Cosmos client
+            scraper.live_refresh_interval = LIVE_REFRESH_INTERVAL
+            scraper.upcoming_refresh_interval = UPCOMING_REFRESH_INTERVAL
+            scraper.full_refresh_timeout = FULL_REFRESH_TIMEOUT
+            scraper.cosmos_client = cosmos_client
+            scraper.auto_store = True  # Enable auto-storage
+            
+            # Create league-specific callback
+            league_callback = lambda matches, league=league_name: match_callback_with_league(matches, league)
+            
+            # Start monitoring thread
+            thread = scraper.start_monitoring(
+                callback=league_callback,
+                max_duration=MAX_RUNTIME_HOURS * 3600
+            )
+            monitoring_threads.append((league_name, thread))
+        
+        logger.info(f"Started {len(monitoring_threads)} monitoring threads")
+        
+        # Main monitoring loop
+        while True:
+            # Check if all threads are still alive
+            active_threads = [(name, thread) for name, thread in monitoring_threads if thread.is_alive()]
+            
+            if len(active_threads) != len(monitoring_threads):
+                dead_threads = [name for name, thread in monitoring_threads if not thread.is_alive()]
+                logger.warning(f"Monitoring threads died: {dead_threads}")
+                # Could restart dead threads here if needed
             
             # Periodic cleanup
             if cosmos_client and (datetime.now() - last_cleanup).seconds > (CLEANUP_INTERVAL_HOURS * 3600):
@@ -141,9 +170,19 @@ def main():
                 logger.info(f"Max runtime of {MAX_RUNTIME_HOURS} hours reached")
                 break
             
-            # Wait for next scrape cycle
-            logger.info(f"Waiting {SCRAPE_INTERVAL_MINUTES} minutes until next scrape...")
-            time.sleep(SCRAPE_INTERVAL_MINUTES * 60)
+            # Sleep for a short time before checking again
+            time.sleep(30)  # Check every 30 seconds
+        
+        # Stop all monitoring threads
+        logger.info("Stopping all monitoring threads...")
+        for league_name, scraper in multi_scraper.scrapers.items():
+            scraper.stop_monitoring()
+        
+        # Wait for threads to finish
+        for league_name, thread in monitoring_threads:
+            if thread.is_alive():
+                logger.info(f"Waiting for {league_name} monitoring thread to stop...")
+                thread.join(timeout=10)
         
         # Final stats
         if cosmos_client:
@@ -155,11 +194,17 @@ def main():
         
     except KeyboardInterrupt:
         logger.info("Received interrupt signal, shutting down...")
+        # Stop all monitoring threads
+        for league_name, scraper in multi_scraper.scrapers.items():
+            scraper.stop_monitoring()
         multi_scraper.close_all()
         return 0
         
     except Exception as e:
         logger.error(f"Application error: {e}")
+        # Stop all monitoring threads
+        for league_name, scraper in multi_scraper.scrapers.items():
+            scraper.stop_monitoring()
         multi_scraper.close_all()
         return 1
 
