@@ -62,8 +62,12 @@ class HardRockScraper:
             if not self.chrome_manager.driver:
                 self.chrome_manager.start_driver()
             
-            # Get page content
-            html_content = self.chrome_manager.get_page(self.base_url)
+            # Get page content with proper waiting for dynamic content
+            html_content = self.chrome_manager.get_page(
+                self.base_url, 
+                wait_for_element=".hr-market-view, [class*='event']",
+                timeout=25  # Longer timeout for production
+            )
             self.last_html = html_content
             self.last_full_refresh = datetime.now()
             
@@ -216,8 +220,12 @@ class HardRockScraper:
             if not self.chrome_manager.is_alive():
                 self.chrome_manager.restart_driver()
             
-            # Get fresh page content
-            html_content = self.chrome_manager.get_page(self.base_url)
+            # Get fresh page content with proper waiting
+            html_content = self.chrome_manager.get_page(
+                self.base_url,
+                wait_for_element=".hr-market-view, [class*='event']", 
+                timeout=25
+            )
             self.last_html = html_content
             self.last_full_refresh = datetime.now()
             

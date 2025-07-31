@@ -34,29 +34,71 @@ class ChromeManager:
         return ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                 "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     
-    def start_driver(self) -> webdriver.Chrome:
-        """Initialize and return Chrome driver with stealth settings"""
-        try:
-            if UNDETECTED_AVAILABLE:
-                self.driver = self._create_undetected_driver()
-            else:
-                self.driver = self._create_standard_driver()
+    def start_driver(self, max_retries: int = 3) -> webdriver.Chrome:
+        """Initialize and return Chrome driver with stealth settings and retry logic"""
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                self.logger.info(f"Starting Chrome driver (attempt {attempt + 1}/{max_retries})")
                 
-            self._configure_driver()
-            return self.driver
-            
-        except Exception as e:
-            raise ChromeError(f"Failed to start Chrome driver: {e}")
+                if UNDETECTED_AVAILABLE:
+                    self.driver = self._create_undetected_driver()
+                else:
+                    self.driver = self._create_standard_driver()
+                    
+                self._configure_driver()
+                self.logger.info("Chrome driver started successfully")
+                return self.driver
+                
+            except Exception as e:
+                last_error = e
+                self.logger.warning(f"Chrome driver start attempt {attempt + 1} failed: {e}")
+                
+                # Clean up any partial driver
+                if self.driver:
+                    try:
+                        self.driver.quit()
+                    except:
+                        pass
+                    self.driver = None
+                
+                # Wait before retry (except on last attempt)
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(3)
+        
+        # All attempts failed
+        raise ChromeError(f"Failed to start Chrome driver after {max_retries} attempts: {last_error}")
     
     def _create_undetected_driver(self) -> webdriver.Chrome:
         """Create undetected Chrome driver"""
         options = uc.ChromeOptions()
         
-        # Container-friendly settings
+        # Container-friendly settings  
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--disable-gpu')
         options.add_argument('--disable-features=VizDisplayCompositor')
+        
+        # Memory and performance optimizations for containers
+        options.add_argument('--memory-pressure-off')
+        options.add_argument('--max_old_space_size=4096')
+        options.add_argument('--disable-background-timer-throttling')
+        options.add_argument('--disable-backgrounding-occluded-windows')
+        options.add_argument('--disable-renderer-backgrounding')
+        
+        # Network and loading optimizations
+        options.add_argument('--aggressive-cache-discard')
+        options.add_argument('--disable-background-networking')
+        options.add_argument('--disable-default-apps')
+        options.add_argument('--disable-extensions')
+        
+        # JavaScript and rendering optimizations
+        options.add_argument('--disable-hang-monitor')
+        options.add_argument('--disable-prompt-on-repost')
+        options.add_argument('--disable-web-security')  # Only for scraping
+        options.add_argument('--allow-running-insecure-content')
         options.add_argument('--disable-blink-features=AutomationControlled')
         
         # Headless mode
@@ -153,14 +195,50 @@ class ChromeManager:
         except WebDriverException as e:
             raise ChromeError(f"WebDriver error: {e}")
     
-    def _wait_for_js_load(self, timeout: int = 10):
-        """Wait for JavaScript to finish loading"""
+    def _wait_for_js_load(self, timeout: int = 15):
+        """Wait for JavaScript to finish loading and dynamic content to appear"""
         try:
+            # Step 1: Wait for document ready
             WebDriverWait(self.driver, timeout).until(
                 lambda driver: driver.execute_script("return document.readyState") == "complete"
             )
+            
+            # Step 2: Wait for HardRock specific content to load
+            self._wait_for_hardrock_content(timeout)
+            
         except TimeoutException:
             self.logger.warning("JavaScript loading timeout - proceeding anyway")
+    
+    def _wait_for_hardrock_content(self, timeout: int = 15):
+        """Wait specifically for HardRock betting content to load"""
+        try:
+            # Wait for match containers to appear
+            self.logger.debug("Waiting for match containers...")
+            WebDriverWait(self.driver, timeout).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".hr-market-view, [class*='event']"))
+            )
+            
+            # Additional wait for odds to load (they load after containers)
+            self.logger.debug("Waiting for odds content...")
+            try:
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, ".selection-odds, .selection-container"))
+                )
+            except TimeoutException:
+                self.logger.debug("Odds containers not found - may be no betting available")
+            
+            # Wait a bit more for any final AJAX calls
+            time.sleep(2)
+            
+        except TimeoutException:
+            self.logger.warning("HardRock content loading timeout - checking for fallback selectors")
+            # Check if we have any content at all
+            try:
+                WebDriverWait(self.driver, 5).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "body"))
+                )
+            except TimeoutException:
+                self.logger.error("No body content found - page may have failed to load")
     
     def refresh_page(self) -> str:
         """Refresh current page and return HTML"""
