@@ -172,7 +172,7 @@ az containerapp update \
 | `LIVE_REFRESH_INTERVAL` | `5` | Seconds between live match updates |
 | `COSMOS_ENDPOINT` | - | Cosmos DB endpoint (secret) |
 | `COSMOS_KEY` | - | Cosmos DB key (secret) |
-| `COSMOS_DATABASE_NAME` | `pingpong-betting` | Database name |
+| `COSMOS_DATABASE_NAME` | `pingpong_betting` | Database name |
 | `COSMOS_CONTAINER_NAME` | `hardrock_matches` | Container name |
 
 ## 🛠️ Troubleshooting
