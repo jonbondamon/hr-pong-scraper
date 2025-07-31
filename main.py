@@ -15,15 +15,18 @@ from health_server import start_health_server
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Configure logging with debug level for parser
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Changed to DEBUG for detailed logs
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
         logging.FileHandler('/tmp/scraper.log')
     ]
 )
+
+# Reduce noise from Azure logs but keep our debug logs
+logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 

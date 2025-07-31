@@ -50,7 +50,7 @@ class MultiLeagueScraper:
                 base_url=url,
                 headless=self.headless,
                 cosmos_client=self.cosmos_client,
-                auto_store=True  # Auto-store to Cosmos DB
+                auto_store=False  # Don't auto-store, we'll handle storage manually
             )
             
             self.scrapers[league_name] = scraper
@@ -72,6 +72,11 @@ class MultiLeagueScraper:
                 
                 results[league_name] = matches
                 logger.info(f"{league_name}: Found {len(matches)} matches")
+                
+                # Store to Cosmos DB with league data set
+                if self.cosmos_client and matches:
+                    stored_count = self.cosmos_client.store_matches(matches)
+                    logger.info(f"{league_name}: Stored {stored_count} matches to Cosmos DB")
                 
                 # Add to combined list
                 self.all_matches.extend(matches)

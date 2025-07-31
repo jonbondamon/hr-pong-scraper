@@ -86,9 +86,36 @@ class HardRockParser:
             score = None
             if status == MatchStatus.LIVE:
                 score = self._extract_score(container)
+                
+                # Debug logging for production troubleshooting
+                if not score:
+                    self.logger.debug(f"No score extracted for LIVE match {match_id}: {players[0].name} vs {players[1].name}")
+                    score_containers = container.select('.scoreContainer')
+                    self.logger.debug(f"Found {len(score_containers)} score containers")
+                    if score_containers:
+                        for i, sc in enumerate(score_containers[:2]):
+                            main_score = sc.select_one('.mainScore')
+                            scores = sc.select('.score:not(.mainScore)')
+                            self.logger.debug(f"Score container {i}: main={main_score.get_text(strip=True) if main_score else 'None'}, individual_scores={[s.get_text(strip=True) for s in scores]}")
+                    else:
+                        self.logger.debug(f"No .scoreContainer elements found in live match")
             
             # Extract odds
             odds = self._extract_odds(container)
+            
+            # Debug logging for production troubleshooting
+            if not odds:
+                self.logger.debug(f"No odds extracted for match {match_id}: {players[0].name} vs {players[1].name}")
+                # Log selection containers for debugging
+                selection_containers = container.select('.selection-container')
+                self.logger.debug(f"Found {len(selection_containers)} selection containers")
+                if selection_containers:
+                    for i, sel in enumerate(selection_containers[:2]):
+                        odds_elem = sel.select_one('.selection-odds')
+                        if odds_elem:
+                            self.logger.debug(f"Selection {i}: odds element text = '{odds_elem.get_text(strip=True)}'")
+                        else:
+                            self.logger.debug(f"Selection {i}: no .selection-odds element found")
             
             # Extract additional info
             start_time = self._extract_start_time(container)
