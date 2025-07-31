@@ -67,6 +67,18 @@ class HardRockScraper:
             self.last_html = html_content
             self.last_full_refresh = datetime.now()
             
+            # Debug: Save HTML content for analysis (temporary)
+            try:
+                import os
+                if os.getenv("SAVE_DEBUG_HTML", "false").lower() == "true":
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"/tmp/debug_html_{timestamp}.html"
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        f.write(html_content)
+                    self.logger.info(f"Saved debug HTML to {filename} ({len(html_content):,} chars)")
+            except Exception as e:
+                self.logger.warning(f"Failed to save debug HTML: {e}")
+            
             # Parse matches
             matches = self.parser.parse_html(html_content)
             self.last_matches = matches
