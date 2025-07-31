@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from hardrock_scraper import HardRockScraper
 from hardrock_scraper.cosmos_client import CosmosDBClient
 from multi_league_scraper import MultiLeagueScraper
+from health_server import start_health_server
 
 # Load environment variables
 load_dotenv()
@@ -49,6 +50,10 @@ def main():
     logger.info(f"Headless mode: {HEADLESS}")
     logger.info(f"Max runtime: {MAX_RUNTIME_HOURS} hours")
     logger.info(f"Scrape interval: {SCRAPE_INTERVAL_MINUTES} minutes")
+    
+    # Start health check server
+    health_server, health_status = start_health_server(port=8080)
+    logger.info("Health check server started on port 8080")
     
     # Initialize Cosmos DB client
     cosmos_client = None
@@ -111,8 +116,12 @@ def main():
                     odds_str = f" [{match.odds.player1_moneyline}|{match.odds.player2_moneyline}]" if match.odds else ""
                     logger.info(f"LIVE [{match.league}]: {match.player1.name} vs {match.player2.name}{score_str}{odds_str}")
                 
+                # Update health status
+                health_status.update_scrape(success=True)
+                
             except Exception as e:
                 logger.error(f"Scrape cycle failed: {e}")
+                health_status.update_scrape(success=False, error=e)
             
             # Periodic cleanup
             if cosmos_client and (datetime.now() - last_cleanup).seconds > (CLEANUP_INTERVAL_HOURS * 3600):

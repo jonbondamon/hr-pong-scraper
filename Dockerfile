@@ -53,7 +53,7 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "import sys; sys.exit(0)" || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Default command
 CMD ["python", "main.py"]

@@ -1,0 +1,63 @@
+# Azure Container App Configuration
+# Deploy with: az containerapp create --resource-group <rg> --name <name> --yaml azure-containerapp.yaml
+
+properties:
+  managedEnvironmentId: /subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.App/managedEnvironments/YOUR_ENVIRONMENT_NAME
+  configuration:
+    secrets:
+      - name: cosmos-endpoint
+        value: # Set via Azure CLI or Portal
+      - name: cosmos-key
+        value: # Set via Azure CLI or Portal
+    ingress:
+      external: false
+      targetPort: 8080
+    registries: []
+  template:
+    containers:
+      - image: ghcr.io/jonbondamon/hr-pong-scraper:latest
+        name: hr-pong-scraper
+        env:
+          - name: HEADLESS
+            value: "true"
+          - name: LIVE_REFRESH_INTERVAL
+            value: "5"
+          - name: UPCOMING_REFRESH_INTERVAL
+            value: "180"
+          - name: FULL_REFRESH_TIMEOUT
+            value: "300"
+          - name: MAX_RUNTIME_HOURS
+            value: "12"
+          - name: CLEANUP_INTERVAL_HOURS
+            value: "6"
+          - name: SCRAPE_INTERVAL_MINUTES
+            value: "3"
+          - name: COSMOS_ENDPOINT
+            secretRef: cosmos-endpoint
+          - name: COSMOS_KEY
+            secretRef: cosmos-key
+          - name: COSMOS_DATABASE_NAME
+            value: "pingpong-betting"
+          - name: COSMOS_CONTAINER_NAME
+            value: "hardrock_matches"
+        resources:
+          cpu: 1.0
+          memory: 2Gi
+        probes:
+          - type: Liveness
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+    scale:
+      minReplicas: 1
+      maxReplicas: 1
+      rules:
+        - name: cpu-scaling
+          custom:
+            type: cpu
+            metadata:
+              type: Utilization
+              value: "80"
+location: eastus
