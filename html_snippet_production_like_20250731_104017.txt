@@ -1,9 +1,0 @@
-=== HTML Analysis for production_like ===
-
-Element counts:
-.hr-market-view: 12
-.selection-odds: 23
-.selection-container: 48
-.scoreContainer: 16
-.live-icon: 8
-data-tooltip-id: 24

@@ -1,9 +1,0 @@
-=== HTML Analysis for local_headless_false ===
-
-Element counts:
-.hr-market-view: 0
-.selection-odds: 0
-.selection-container: 0
-.scoreContainer: 0
-.live-icon: 0
-data-tooltip-id: 0
