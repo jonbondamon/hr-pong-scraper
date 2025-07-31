@@ -52,27 +52,35 @@ class ChromeManager:
         """Create undetected Chrome driver"""
         options = uc.ChromeOptions()
         
-        # Stealth settings
+        # Container-friendly settings
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--disable-features=VizDisplayCompositor')
         options.add_argument('--disable-blink-features=AutomationControlled')
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option('useAutomationExtension', False)
         
+        # Headless mode
         if self.headless:
             options.add_argument('--headless=new')
         
         # Performance optimizations
         options.add_argument('--disable-images')
-        options.add_argument('--disable-javascript')  # Remove if JS is needed for data loading
         options.add_argument('--disable-plugins')
         options.add_argument('--disable-extensions')
+        options.add_argument('--disable-background-timer-throttling')
+        options.add_argument('--disable-backgrounding-occluded-windows')
+        options.add_argument('--disable-renderer-backgrounding')
         
         # Memory optimizations
         options.add_argument('--memory-pressure-off')
         options.add_argument('--max_old_space_size=4096')
         
-        return uc.Chrome(options=options, version_main=None)
+        # Remove problematic experimental options for container compatibility
+        try:
+            return uc.Chrome(options=options, version_main=None)
+        except Exception as e:
+            self.logger.warning(f"Undetected Chrome failed, falling back to standard: {e}")
+            return self._create_standard_driver()
     
     def _create_standard_driver(self) -> webdriver.Chrome:
         """Create standard Chrome driver with stealth settings"""
@@ -82,9 +90,9 @@ class ChromeManager:
         options.add_argument(f'--user-agent={self.user_agent}')
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--disable-features=VizDisplayCompositor')
         options.add_argument('--disable-blink-features=AutomationControlled')
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option('useAutomationExtension', False)
         
         if self.headless:
             options.add_argument('--headless=new')
@@ -93,6 +101,9 @@ class ChromeManager:
         options.add_argument('--disable-images')
         options.add_argument('--disable-plugins')
         options.add_argument('--disable-extensions')
+        options.add_argument('--disable-background-timer-throttling')
+        options.add_argument('--disable-backgrounding-occluded-windows')
+        options.add_argument('--disable-renderer-backgrounding')
         
         return webdriver.Chrome(options=options)
     
